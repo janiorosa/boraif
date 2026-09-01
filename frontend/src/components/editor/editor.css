@@ -1,0 +1,24 @@
+.ProseMirror {
+  outline: none;
+  min-height: 60px;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.ProseMirror table td,
+.ProseMirror table th {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  min-width: 60px;
+}
+
+.ProseMirror table th {
+  background: #f3f3f3;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+}

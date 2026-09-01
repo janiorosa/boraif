@@ -1,0 +1,8 @@
+# Metadados que o macOS às vezes cria ao copiar/transferir arquivos
+# (ex.: zip feito no Finder, cópia via unidade de rede/USB sem suporte a
+# atributos estendidos). Um "._0001_init.sql" ao lado do
+# "0001_init.sql" de verdade quebra o //go:embed *.sql das migrations —
+# foi exatamente isso que causou o erro "could not parse SQL migration
+# file "._0001_init.sql"" na primeira subida em produção.
+._*
+.DS_Store

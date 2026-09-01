@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Volume Docker nomeado e persistente — sobrevive a rebuild/restart do
+      # frontend e do backend, e a "docker compose up" repetidos. Só é
+      # removido com "docker compose down -v" (nunca use -v sem intenção
+      # explícita de apagar o banco).
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Só localhost do servidor Docker — o backend fala com o Postgres pela
+      # rede interna do Compose (hostname "postgres"), então não há motivo
+      # para expor a porta do banco para o resto da rede local. Se você
+      # realmente precisar conectar um cliente SQL direto da sua máquina
+      # (fora do servidor), troque para "0.0.0.0:${POSTGRES_PORT:-5433}:5432".
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      BACKEND_PORT: 8080
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-boraif_session}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      UPLOADS_DIR: /app/uploads
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-5}
+      API_KEY_ENCRYPTION_SECRET: "${API_KEY_ENCRYPTION_SECRET:?defina API_KEY_ENCRYPTION_SECRET no .env - gere com openssl rand -base64 32}"
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      GENERATED_DIR: /app/generated
+      CHROME_PATH: /usr/bin/chromium
+    volumes:
+      # Bind mounts no host: uploads e PDFs sobrevivem a rebuild da imagem do
+      # backend, exatamente como o volume do Postgres.
+      - ./uploads:/app/uploads
+      - ./generated:/app/generated
+    ports:
+      # 0.0.0.0 explícito: acessível por qualquer máquina da rede local via
+      # o IP do servidor Docker (ex.: http://192.168.1.200:8080), não só
+      # localhost/127.0.0.1 no próprio servidor.
+      - "0.0.0.0:${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Mesma ideia: http://<IP-do-servidor>:5173 funciona de qualquer
+      # máquina na mesma rede, não só do próprio servidor.
+      - "0.0.0.0:${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  postgres_data:

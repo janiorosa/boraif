@@ -1,0 +1,6 @@
+# Metadados do macOS (ver backend/.dockerignore para o histórico do bug
+# que isso evita) + artefatos locais que não devem ir para a imagem.
+._*
+.DS_Store
+node_modules
+dist
