@@ -784,6 +784,55 @@ dos demais cadernos da mesma aplicação.
 
 ---
 
+## 21.2 Tipos de prova e gabarito
+
+Cada caderno pode ter de **1 a 4 "tipos de prova"** (ex.: "Tipo 1", "Tipo
+2"), configurável na tela de configuração do caderno, com **padrão 2** (o
+mais comum).
+
+Regra fundamental: todos os tipos de um mesmo caderno usam **exatamente o
+mesmo conjunto de questões** — nunca questões diferentes entre tipos. O que
+muda entre tipos é apenas:
+
+- a **ordem das questões**, preservando os blocos por disciplina: se as
+  questões 1 a 10 são de Matemática no Tipo 1, as questões 1 a 10 também
+  são de Matemática em todos os outros tipos do mesmo caderno — só a ordem
+  *dentro* de cada bloco de disciplina muda entre tipos;
+- a **ordem das 5 alternativas** de cada questão — consequentemente, a
+  letra da alternativa correta de uma mesma questão pode ser diferente em
+  cada tipo.
+
+Cada tipo de prova gera, portanto, seu próprio PDF de prova. Um caderno com
+N tipos configurados produz N arquivos de prova, cada um baixável
+individualmente pela tela do caderno, exatamente como um único PDF é
+baixado hoje.
+
+O tipo (ex.: "TIPO 1") deve aparecer em destaque, em fonte grande (sem ser
+desproporcional), tanto no PDF da prova quanto no PDF do gabarito daquele
+tipo.
+
+### Gabarito
+
+Cada tipo de prova tem seu próprio **gabarito** — a lista de respostas
+corretas no formato "Q1 - A", "Q2 - C" etc. — gerado junto do PDF da prova.
+
+O gabarito de cada tipo deve ficar **gravado no banco de dados**,
+associado ao caderno e ao tipo específico — diferente do arquivo PDF em si
+(que só precisa existir no filesystem, seção 31). Isso garante que o
+gabarito de uma aplicação já realizada continue consultável mesmo que o
+PDF seja perdido ou regenerado.
+
+O layout do gabarito deve organizar as respostas em colunas, para caber no
+menor número possível de páginas — idealmente uma página só, exceto quando
+o número de questões for grande demais para isso.
+
+O gabarito de cada tipo deve poder ser baixado em PDF e em CSV. Suporte a
+XLS é desejável, mas pode ser omitido caso sua geração seja
+desproporcionalmente complexa — CSV já atende à necessidade de exportação
+para planilha.
+
+---
+
 # 22. Configuração padrão
 
 O sistema deve possuir uma configuração padrão sugerida.

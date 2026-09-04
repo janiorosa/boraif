@@ -35,6 +35,7 @@ type quotaRuleDTO struct {
 type configurationResponse struct {
 	BookletID      int64          `json:"bookletId,omitempty"`
 	TotalQuestions int            `json:"totalQuestions"`
+	VariantCount   int            `json:"variantCount,omitempty"`
 	IsFrozen       bool           `json:"isFrozen"`
 	GradeYearIDs   []int64        `json:"gradeYearIds"`
 	QuotaRules     []quotaRuleDTO `json:"quotaRules"`
@@ -52,7 +53,7 @@ func toConfigurationResponse(c Configuration) configurationResponse {
 		years = []int64{}
 	}
 	return configurationResponse{
-		BookletID: c.BookletID, TotalQuestions: c.TotalQuestions, IsFrozen: c.IsFrozen,
+		BookletID: c.BookletID, TotalQuestions: c.TotalQuestions, VariantCount: c.VariantCount, IsFrozen: c.IsFrozen,
 		GradeYearIDs: years, QuotaRules: rules,
 	}
 }
@@ -157,6 +158,7 @@ func (h *Handlers) GetConfiguration(w http.ResponseWriter, r *http.Request) {
 
 type updateConfigurationRequest struct {
 	TotalQuestions int            `json:"totalQuestions"`
+	VariantCount   int            `json:"variantCount"`
 	GradeYearIDs   []int64        `json:"gradeYearIds"`
 	QuotaRules     []quotaRuleDTO `json:"quotaRules"`
 }
@@ -180,6 +182,10 @@ func (h *Handlers) UpdateConfiguration(w http.ResponseWriter, r *http.Request) {
 		apiutil.WriteError(w, http.StatusBadRequest, "totalQuestions deve ser maior que zero")
 		return
 	}
+	variantCount := req.VariantCount
+	if variantCount == 0 {
+		variantCount = 2
+	}
 
 	quotas := make([]QuotaRule, 0, len(req.QuotaRules))
 	for _, q := range req.QuotaRules {
@@ -190,7 +196,7 @@ func (h *Handlers) UpdateConfiguration(w http.ResponseWriter, r *http.Request) {
 		quotas = append(quotas, QuotaRule{DisciplineID: q.DisciplineID, SubjectID: q.SubjectID, DifficultyID: q.DifficultyID, Quantity: q.Quantity})
 	}
 
-	err = h.Repo.UpdateConfiguration(r.Context(), id, req.TotalQuestions, req.GradeYearIDs, quotas)
+	err = h.Repo.UpdateConfiguration(r.Context(), id, req.TotalQuestions, variantCount, req.GradeYearIDs, quotas)
 	switch {
 	case errors.Is(err, ErrNotFound):
 		apiutil.WriteError(w, http.StatusNotFound, "booklet not found")
@@ -200,6 +206,9 @@ func (h *Handlers) UpdateConfiguration(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, ErrQuotaMismatch):
 		apiutil.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	case errors.Is(err, ErrInvalidVariants):
+		apiutil.WriteError(w, http.StatusBadRequest, "variantCount deve ser entre 1 e 4")
 		return
 	case errors.Is(err, ErrInvalidReference):
 		apiutil.WriteError(w, http.StatusBadRequest, "ano/disciplina/assunto/dificuldade inválidos")

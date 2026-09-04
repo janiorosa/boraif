@@ -6,7 +6,7 @@ import { api, ApiError } from "../../api/client";
 import type { Discipline } from "../../types";
 import type { Difficulty, GradeYear } from "../questions/types";
 import type { Subject } from "../subjects/types";
-import type { AvailabilityResult, Booklet, Configuration, GeneratedDocument, QuotaRule } from "./types";
+import type { AvailabilityResult, Booklet, Configuration, GeneratedDocument, QuotaRule, Variant } from "./types";
 
 const STATUS_LABELS: Record<GeneratedDocument["status"], string> = {
   PENDING: "Na fila",
@@ -39,6 +39,7 @@ export function BookletConfigPage() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -70,8 +71,12 @@ export function BookletConfigPage() {
   }, [bookletId]);
 
   async function loadDocuments() {
-    const list = await api.get<GeneratedDocument[]>(`/api/booklets/${bookletId}/generated-documents`);
+    const [list, variantList] = await Promise.all([
+      api.get<GeneratedDocument[]>(`/api/booklets/${bookletId}/generated-documents`),
+      api.get<Variant[]>(`/api/booklets/${bookletId}/variants`),
+    ]);
     setDocuments(list);
+    setVariants(variantList);
     return list;
   }
 
@@ -106,7 +111,12 @@ export function BookletConfigPage() {
     }
   }
 
-  async function handleSave(updated: { totalQuestions: number; gradeYearIds: number[]; quotaRules: QuotaRule[] }) {
+  async function handleSave(updated: {
+    totalQuestions: number;
+    variantCount: number;
+    gradeYearIds: number[];
+    quotaRules: QuotaRule[];
+  }) {
     setSaving(true);
     setSaveError(null);
     try {
@@ -158,6 +168,7 @@ export function BookletConfigPage() {
         onSubmit={handleSave}
         submitting={saving}
         error={saveError}
+        showVariantCount
       />
 
       <div style={{ marginTop: 32 }}>
@@ -211,34 +222,58 @@ export function BookletConfigPage() {
         </button>
         {generateError && <p style={{ color: "crimson" }}>{generateError}</p>}
 
-        {documents.length > 0 && (
-          <table style={{ borderCollapse: "collapse", marginTop: 12 }}>
-            <thead>
-              <tr style={{ textAlign: "left" }}>
-                <th>Solicitado em</th>
-                <th>Status</th>
-                <th>Detalhe</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((d) => (
-                <tr key={d.id}>
-                  <td>{new Date(d.createdAt).toLocaleString("pt-BR")}</td>
-                  <td>{STATUS_LABELS[d.status]}</td>
-                  <td style={{ color: d.status === "FAILED" ? "crimson" : "inherit" }}>{d.errorMessage || "—"}</td>
-                  <td>
-                    {d.status === "COMPLETED" && (
-                      <a href={`/api/generated-documents/${d.id}/file`} target="_blank" rel="noreferrer">
-                        Baixar PDF
+        {variants.map((v) => {
+          const exam = documents.find((d) => d.variantId === v.id && d.kind === "EXAM");
+          const answerKey = documents.find((d) => d.variantId === v.id && d.kind === "ANSWER_KEY");
+          return (
+            <div key={v.id} style={{ marginTop: 20, paddingTop: 12, borderTop: "1px solid #ddd" }}>
+              <h3 style={{ margin: 0 }}>Tipo {v.variantNumber}</h3>
+              <table style={{ borderCollapse: "collapse", marginTop: 8 }}>
+                <thead>
+                  <tr style={{ textAlign: "left" }}>
+                    <th>Documento</th>
+                    <th>Status</th>
+                    <th>Detalhe</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Prova</td>
+                    <td>{exam ? STATUS_LABELS[exam.status] : "—"}</td>
+                    <td style={{ color: exam?.status === "FAILED" ? "crimson" : "inherit" }}>
+                      {exam?.errorMessage || "—"}
+                    </td>
+                    <td>
+                      {exam?.status === "COMPLETED" && (
+                        <a href={`/api/generated-documents/${exam.id}/file`} target="_blank" rel="noreferrer">
+                          Baixar PDF
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Gabarito</td>
+                    <td>{answerKey ? STATUS_LABELS[answerKey.status] : "—"}</td>
+                    <td style={{ color: answerKey?.status === "FAILED" ? "crimson" : "inherit" }}>
+                      {answerKey?.errorMessage || "—"}
+                    </td>
+                    <td>
+                      {answerKey?.status === "COMPLETED" && (
+                        <a href={`/api/generated-documents/${answerKey.id}/file`} target="_blank" rel="noreferrer">
+                          Baixar PDF
+                        </a>
+                      )}{" "}
+                      <a href={`/api/booklet-variants/${v.id}/answer-key.csv`} target="_blank" rel="noreferrer">
+                        Baixar CSV
                       </a>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </AppLayout>
   );

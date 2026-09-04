@@ -169,16 +169,24 @@ Fluxo completo:
 questão salva (JSON ProseMirror por campo)
         │  (na primeira geração de um caderno)
         ▼
-seleção aleatória das questões elegíveis por cota (seção 25)
+seleção aleatória das questões elegíveis por cota (seção 25),
+agrupadas em blocos contíguos por disciplina (não mais embaralhadas juntas)
         │
         ▼
 snapshot congelado (seção 26) + configuração travada (seção 27)
         │
         ▼
-JSON → HTML (internal/pdf/render.go)
+até 4 "tipos de prova" gerados (seção 21.2): mesmas questões, cada tipo
+reordena só DENTRO de cada bloco de disciplina + embaralha as 5
+alternativas de cada questão — o resultado (posição impressa × letra
+correta) já É o gabarito daquele tipo, gravado em booklet_variant_questions
+        │  (isso tudo é só banco — roda síncrono, dentro do handler HTTP)
+        ▼
+JSON → HTML (internal/pdf/render.go), um documento por tipo × {prova, gabarito}
         │
         ▼
-documento HTML completo, com placeholders de fórmula
+documento HTML completo, com placeholders de fórmula (prova) ou a lista
+"Q# - Letra" em colunas via CSS column-width (gabarito)
         │
         ▼
 Chromium headless carrega o HTML, roda o KaTeX (via CDN) sobre os
@@ -188,8 +196,12 @@ placeholders, e só então o backend manda imprimir em PDF (chromedp)
 PDF salvo em disco + registro de status atualizado (COMPLETED)
 ```
 
-Tudo isso roda numa goroutine simples, sem fila — a requisição HTTP que
-disparou a geração já respondeu antes disso terminar.
+A etapa de seleção/congelamento/geração de tipos roda dentro da própria
+requisição HTTP que pediu a geração (é rápida — só banco). Só a
+renderização de PDF em si, por documento, roda depois em background, uma
+de cada vez — um caderno com N tipos gera 2×N PDFs (prova + gabarito por
+tipo) numa única geração. O gabarito também pode ser baixado em CSV sem
+passar por nada disso: é montado na hora, direto do banco.
 
 ### Autenticação
 

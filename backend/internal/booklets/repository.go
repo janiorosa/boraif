@@ -16,6 +16,7 @@ var (
 	ErrInvalidReference = errors.New("invalid application/discipline/subject/difficulty/grade year reference")
 	ErrFrozen           = errors.New("booklet configuration is frozen")
 	ErrQuotaMismatch    = errors.New("sum of quota rules does not match total questions")
+	ErrInvalidVariants  = errors.New("variant count must be between 1 and 4")
 )
 
 type Repository struct {
@@ -145,8 +146,8 @@ func (r *Repository) GetConfiguration(ctx context.Context, bookletID int64) (Con
 	var cfg Configuration
 	cfg.BookletID = bookletID
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, total_questions, is_frozen FROM booklet_configurations WHERE booklet_id = $1
-	`, bookletID).Scan(&cfg.ID, &cfg.TotalQuestions, &cfg.IsFrozen)
+		SELECT id, total_questions, variant_count, is_frozen FROM booklet_configurations WHERE booklet_id = $1
+	`, bookletID).Scan(&cfg.ID, &cfg.TotalQuestions, &cfg.VariantCount, &cfg.IsFrozen)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Configuration{}, ErrNotFound
 	}
@@ -172,13 +173,16 @@ func (r *Repository) GetConfiguration(ctx context.Context, bookletID int64) (Con
 // UpdateConfiguration substitui os anos e as cotas do caderno por completo
 // (o conjunto é pequeno e mantido pelo gestor/admin numa tela só — apagar e
 // reinserir dentro da transação é mais simples que calcular um diff).
-func (r *Repository) UpdateConfiguration(ctx context.Context, bookletID int64, totalQuestions int, gradeYearIDs []int64, quotas []QuotaRule) error {
+func (r *Repository) UpdateConfiguration(ctx context.Context, bookletID int64, totalQuestions, variantCount int, gradeYearIDs []int64, quotas []QuotaRule) error {
 	sum := 0
 	for _, q := range quotas {
 		sum += q.Quantity
 	}
 	if sum != totalQuestions {
 		return fmt.Errorf("%w: soma das cotas é %d, total informado é %d", ErrQuotaMismatch, sum, totalQuestions)
+	}
+	if variantCount < 1 || variantCount > 4 {
+		return ErrInvalidVariants
 	}
 
 	tx, err := r.pool.Begin(ctx)
@@ -203,8 +207,8 @@ func (r *Repository) UpdateConfiguration(ctx context.Context, bookletID int64, t
 	}
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE booklet_configurations SET total_questions = $1, updated_at = now() WHERE id = $2
-	`, totalQuestions, configID); err != nil {
+		UPDATE booklet_configurations SET total_questions = $1, variant_count = $2, updated_at = now() WHERE id = $3
+	`, totalQuestions, variantCount, configID); err != nil {
 		return err
 	}
 

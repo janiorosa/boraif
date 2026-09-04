@@ -9,22 +9,9 @@ import (
 	"time"
 )
 
-// Snapshot é a representação congelada de uma questão dentro de um caderno
-// (seção 26) — preservada mesmo que a questão original seja editada depois.
-type Snapshot struct {
-	ID                int64
-	BookletID         int64
-	QuestionID        *int64
-	PositionInBooklet int
-	DisciplineName    string
-	SubjectName       string
-	GradeYearName     string
-	DifficultyName    string
-	StatementJSON     json.RawMessage
-	CommandJSON       json.RawMessage
-	Alternatives      []SnapshotAlternative
-}
-
+// SnapshotAlternative é uma alternativa dentro da representação congelada de
+// uma questão (booklet_question_snapshots.alternatives_json) — preservada
+// mesmo que a questão original seja editada depois (seção 26).
 type SnapshotAlternative struct {
 	Position  string          `json:"position"`
 	Content   json.RawMessage `json:"content"`
@@ -38,16 +25,55 @@ const (
 	StatusFailed     = "FAILED"
 )
 
+// Kind de generated_documents: cada tipo de prova gera um par de
+// documentos — a prova em si e o gabarito daquele tipo, cada um com seu
+// próprio arquivo PDF.
+const (
+	KindExam      = "EXAM"
+	KindAnswerKey = "ANSWER_KEY"
+)
+
+// Variant é um "tipo de prova" (requisito acrescentado à especificação):
+// até 4 por caderno, mesmas questões em todas, só a ordem (por disciplina)
+// e a ordem das alternativas mudam entre elas.
+type Variant struct {
+	ID            int64
+	BookletID     int64
+	VariantNumber int
+}
+
+// VariantQuestionDetail é uma questão já resolvida para UM tipo específico:
+// posição impressa naquele tipo, alternativas já na ordem de exibição
+// daquele tipo (com IsCorrect recalculado) e a letra correta — que é
+// exatamente o gabarito daquela questão naquele tipo.
+type VariantQuestionDetail struct {
+	SnapshotID        int64
+	PositionInVariant int
+	DisciplineName    string
+	SubjectName       string
+	GradeYearName     string
+	DifficultyName    string
+	StatementJSON     json.RawMessage
+	CommandJSON       json.RawMessage
+	Alternatives      []SnapshotAlternative
+	CorrectLetter     string
+}
+
 // GeneratedDocument é um registro de geração de PDF (seção 30) — um por
 // tentativa; um caderno pode ter várias (ex.: uma tentativa falhou e foi
-// gerada de novo).
+// gerada de novo). Desde a introdução dos tipos de prova, cada documento
+// pertence a uma variante específica (VariantID) e tem um Kind (prova ou
+// gabarito) — um caderno com N tipos gera 2×N documentos por geração.
 type GeneratedDocument struct {
-	ID           int64
-	BookletID    int64
-	Status       string
-	FilePath     *string
-	ErrorMessage *string
-	RequestedBy  int64
-	CreatedAt    time.Time
-	CompletedAt  *time.Time
+	ID            int64
+	BookletID     int64
+	VariantID     *int64
+	VariantNumber *int
+	Kind          string
+	Status        string
+	FilePath      *string
+	ErrorMessage  *string
+	RequestedBy   int64
+	CreatedAt     time.Time
+	CompletedAt   *time.Time
 }

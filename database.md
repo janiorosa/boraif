@@ -198,6 +198,7 @@ configuração e PDF.
 | `id` | bigserial (PK) | identificador |
 | `booklet_id` | bigint, FK → `application_booklets.id`, único, `ON DELETE CASCADE` | caderno dono (relação 1 para 1) |
 | `total_questions` | integer | quantas questões o caderno deve ter no total |
+| `variant_count` | smallint, `1` a `4`, padrão `2` | quantos "tipos de prova" o caderno terá (seção 21.2) — mesmas questões em todos, só a ordem muda |
 | `is_frozen` | boolean | `true` depois que as questões já foram selecionadas/geradas — a partir daí, a configuração não pode mais ser alterada |
 | `created_at` / `updated_at` | timestamptz | auditoria |
 
@@ -243,7 +244,37 @@ linhas bate com `total_questions`.
 
 Esta é a peça-chave da "seção 26" da especificação: garante que o PDF de
 uma prova já gerada nunca muda, mesmo que a questão original seja editada
-ou até excluída depois.
+ou até excluída depois. As posições aqui são a ordem "canônica", agrupada
+por disciplina em blocos contíguos — cada tipo de prova (abaixo) reordena
+só *dentro* desses blocos, nunca entre eles.
+
+### `booklet_variants` — os "tipos de prova" de um caderno (seção 21.2)
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | bigserial (PK) | identificador |
+| `booklet_id` | bigint, FK → `application_booklets.id`, `ON DELETE CASCADE` | caderno dono |
+| `variant_number` | smallint, `1` a `4` | qual tipo ("Tipo 1", "Tipo 2", ...) — único por caderno |
+| `created_at` | timestamptz | quando foi gerado |
+
+Criados de uma vez, junto com o snapshot, na primeira geração de PDF do
+caderno (`variant_count` linhas). Nunca é criado ou removido depois disso.
+
+### `booklet_variant_questions` — o gabarito de cada tipo
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | bigserial (PK) | identificador |
+| `variant_id` | bigint, FK → `booklet_variants.id`, `ON DELETE CASCADE` | tipo dono |
+| `snapshot_id` | bigint, FK → `booklet_question_snapshots.id`, `ON DELETE CASCADE` | qual questão (a mesma em todos os tipos do caderno) |
+| `position_in_variant` | integer, `> 0` | numeração impressa *daquele tipo* — única por tipo |
+| `alternative_order` | jsonb | as letras originais do snapshot (`alternatives_json`), na nova ordem de exibição daquele tipo — ex.: `["C","A","E","B","D"]` |
+| `correct_letter` | char(1), `A`–`E` | letra correta *naquele tipo* |
+
+`(position_in_variant, correct_letter)` de todas as linhas de um tipo,
+nessa ordem, **é** o gabarito daquele tipo — não existe uma tabela
+"gabarito" separada, porque seria uma duplicata exata desses dados. Fica
+gravado no banco independente de qualquer PDF ter sido gerado.
 
 ### `generated_documents` — histórico de gerações de PDF
 
@@ -251,6 +282,8 @@ ou até excluída depois.
 |---|---|---|
 | `id` | bigserial (PK) | identificador |
 | `booklet_id` | bigint, FK → `application_booklets.id`, `ON DELETE CASCADE` | caderno dono |
+| `variant_id` | bigint, FK → `booklet_variants.id`, `ON DELETE CASCADE`, opcional | tipo de prova dono (nulo só em linhas de antes dos tipos de prova existirem) |
+| `kind` | text, padrão `EXAM` | `EXAM` (prova) ou `ANSWER_KEY` (gabarito em PDF) |
 | `status` | text | `PENDING` → `PROCESSING` → `COMPLETED` ou `FAILED` |
 | `file_path` | text, opcional | caminho do PDF gerado (só depois de `COMPLETED`) |
 | `error_message` | text, opcional | motivo da falha (só depois de `FAILED`) |
@@ -258,8 +291,10 @@ ou até excluída depois.
 | `created_at` | timestamptz | quando foi pedida |
 | `completed_at` | timestamptz, opcional | quando terminou (sucesso ou falha) |
 
-Pode haver várias linhas para o mesmo caderno (cada clique em "Gerar PDF"
-cria uma nova) — útil para reprocessar se uma tentativa falhar.
+Cada clique em "Gerar PDF" cria um par de linhas (`EXAM` + `ANSWER_KEY`)
+por tipo de prova do caderno — um caderno com 2 tipos gera 4 linhas por
+geração. O gabarito em CSV não passa por aqui: é montado na hora, direto
+de `booklet_variant_questions`, sem gerar nenhum registro.
 
 ## Configuração padrão
 
@@ -303,6 +338,9 @@ Além das chaves primárias/estrangeiras (sempre indexadas), o schema cria
 - `images`, `booklet_question_snapshots`, `generated_documents`,
   `application_booklets`: por disciplina/caderno/aplicação, conforme o
   caso — sempre a coluna usada para "listar tudo de X".
+- `booklet_variant_questions`: por `variant_id` (montar a prova/gabarito de
+  um tipo inteiro de uma vez); `generated_documents`: também por
+  `variant_id`.
 
 ## Diagrama simplificado de relações
 
@@ -314,8 +352,10 @@ disciplines ──┬── users (elaborador)
 
 applications ── application_booklets ── booklet_configurations ──┬── booklet_configuration_grade_years
                        │                                          └── booklet_quota_rules
-                       ├── booklet_question_snapshots
-                       └── generated_documents
+                       ├── booklet_question_snapshots ── booklet_variant_questions
+                       ├── booklet_variants ── booklet_variant_questions
+                       │                    └── generated_documents (variant_id)
+                       └── generated_documents (booklet_id)
 
 grade_years / difficulties / question_statuses → referenciadas por
 questions, booklet_configuration_grade_years, booklet_quota_rules, etc.

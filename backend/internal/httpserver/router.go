@@ -136,6 +136,12 @@ func NewRouter(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/booklets/{id}/generate", appOrGestor(deps.PDF.Generate))
 	mux.HandleFunc("GET /api/booklets/{id}/generated-documents", appOrGestor(deps.PDF.ListForBooklet))
 	mux.HandleFunc("GET /api/generated-documents/{id}/file", appOrGestor(deps.PDF.DownloadFile))
+	// Tipos de prova: até 4 por caderno (booklet_configurations.variant_count),
+	// mesmas questões em ordem diferente — cada um com sua prova e seu
+	// gabarito próprios (acima) e o gabarito também disponível em CSV,
+	// gerado na hora direto do banco (sem depender de nenhum PDF pronto).
+	mux.HandleFunc("GET /api/booklets/{id}/variants", appOrGestor(deps.PDF.ListVariants))
+	mux.HandleFunc("GET /api/booklet-variants/{variantId}/answer-key.csv", appOrGestor(deps.PDF.AnswerKeyCSV))
 
 	return deps.AuthMiddleware.WithUser(mux)
 }

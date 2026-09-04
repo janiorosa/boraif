@@ -205,23 +205,39 @@ criados.
 
 ## 5.4 Geração de PDF
 
+Na configuração do caderno há um campo **Quantidade de tipos de prova** (1
+a 4, padrão 2 — seção 21.2): todos os tipos usam exatamente as mesmas
+questões, só a ordem (preservando os blocos por disciplina) e a ordem das
+alternativas mudam entre eles.
+
 Na mesma tela do caderno (`/cadernos/{id}`), abaixo da disponibilidade,
 clique em **Gerar PDF**:
 
 1. Se as questões do caderno ainda não foram selecionadas, o backend
    seleciona aleatoriamente as questões elegíveis de cada cota (seção 25),
-   congela essa seleção (seção 26) e trava a configuração (seção 27, campo
-   `is_frozen`) — tudo isso antes de montar o PDF.
-2. A geração roda em background (seção 30): a tela mostra o status
+   congela essa seleção (seção 26), gera os tipos de prova configurados
+   (seção 21.2) e trava a configuração (seção 27, campo `is_frozen`) — tudo
+   isso antes de montar qualquer PDF.
+2. Para cada tipo, dois documentos são gerados em background (seção 30): a
+   prova e o gabarito. A tela mostra, por tipo, o status de cada um
    evoluindo de "Na fila" → "Gerando..." → "Concluído" (ou "Falhou", com o
    motivo), consultando o servidor a cada poucos segundos só enquanto
    houver algo em andamento.
-3. Quando concluído, aparece um link **Baixar PDF**.
+3. Quando concluído, aparecem os links **Baixar PDF** da prova e do
+   gabarito daquele tipo, além de **Baixar CSV** do gabarito — este último
+   não depende de nenhum PDF pronto, pois é gerado na hora direto do que já
+   está gravado no banco.
 
-Gerar de novo um caderno já congelado não sorteia outras questões — reusa
-o mesmo snapshot e só refaz o PDF (útil se a primeira tentativa falhar por
-algum motivo transitório). Cada geração fica registrada no histórico da
-tela, então dá para ver tentativas anteriores e seus erros.
+Gerar de novo um caderno já congelado não sorteia outras questões nem gera
+novos tipos — reusa o mesmo snapshot e as mesmas variantes e só refaz os
+PDFs (útil se a primeira tentativa falhar por algum motivo transitório).
+Cada geração fica registrada no histórico da tela, então dá para ver
+tentativas anteriores e seus erros.
+
+O gabarito (a resposta correta de cada questão, por posição impressa e por
+tipo) fica gravado no banco (`booklet_variant_questions`), independente de
+qualquer arquivo PDF existir — o PDF e o CSV do gabarito são só duas formas
+de exportar o que já está lá.
 
 **Nota**: a renderização de fórmulas no PDF carrega o KaTeX de uma CDN no
 momento da geração — o container do backend precisa de acesso de saída à
@@ -784,6 +800,55 @@ primeiro `docker compose up`:
   pareciam a mesma coisa). Adicionado `log.Printf` com o erro completo
   antes de responder a mensagem genérica ao professor; a mensagem que ele
   vê continua propositalmente sem detalhe técnico.
+
+## Tipos de prova e gabarito (seção 21.2, requisito adicionado depois da Fase 10)
+
+Extensão pedida depois do sistema em produção: cada caderno passa a poder
+ter de 1 a 4 "tipos de prova" (`booklet_configurations.variant_count`,
+padrão 2), todos com as mesmas questões — só a ordem (por bloco de
+disciplina) e a ordem das alternativas mudam — e cada tipo com seu próprio
+gabarito gravado no banco.
+
+- **Duas tabelas novas** (`migrations/0004_booklet_variants.sql`):
+  `booklet_variants` (um tipo de um caderno) e
+  `booklet_variant_questions` (uma questão dentro de um tipo:
+  `position_in_variant`, `alternative_order` — as letras originais do
+  snapshot na nova ordem de exibição — e `correct_letter`). Esse par de
+  colunas *é* o gabarito daquele tipo: não existe uma tabela "gabarito"
+  separada, porque seria só uma duplicata dos mesmos dados.
+- **`generated_documents` passou a existir por tipo, não por caderno**:
+  ganhou `variant_id` (opcional, para não quebrar linhas antigas de antes
+  dessa migration) e `kind` (`EXAM` ou `ANSWER_KEY`). Um caderno com N
+  tipos agora produz 2×N documentos numa geração — antes eram sempre 1.
+- **A seleção de questões deixou de embaralhar tudo junto**
+  (`pdf.Repository.SelectAndSnapshot`): antes, todas as questões
+  selecionadas eram embaralhadas numa lista só; agora elas são agrupadas
+  por disciplina (preservando a ordem de primeira aparição entre as cotas,
+  mesmo que o admin tenha cadastrado cotas da mesma disciplina de forma
+  não-consecutiva) em blocos contíguos de posição. Isso é o que permite
+  cada tipo reordenar só *dentro* de cada bloco, sem nunca mover uma
+  questão de Matemática para fora do intervalo de posições de Matemática.
+- **Geração deixou de ser 100% background**: antes, `Generate` só criava
+  um registro PENDING (rápido) e todo o resto — inclusive selecionar e
+  congelar as questões — rodava depois, numa goroutine. Agora, congelar o
+  snapshot e gerar as variantes precisa acontecer *antes* de criar os
+  registros de documento (cada documento referencia um `variant_id`, que
+  só existe depois de congelar). Como essa etapa é só banco, sem Chromium,
+  ela roda de forma síncrona dentro do handler `Generate` — só a
+  renderização de PDF em si (lenta, por documento) continua em background,
+  processada um documento de cada vez (`Service.ProcessAll`), para não
+  disputar recursos com várias instâncias do Chromium ao mesmo tempo.
+- **Gabarito em PDF e CSV**: o PDF do gabarito reusa o mesmo pipeline
+  HTML→Chromium da prova (`pdf.BuildAnswerKeyDocument`), com a lista
+  "Q# - Letra" em `column-width` no CSS — o próprio motor de renderização
+  decide quantas colunas cabem numa página A4, sem precisar calcular isso
+  no Go. O CSV (`GET /api/booklet-variants/{variantId}/answer-key.csv`) é
+  gerado na hora, direto de `booklet_variant_questions`, sem depender de
+  nenhum PDF ter sido processado — por isso o link de CSV aparece assim
+  que o caderno é congelado, mesmo com a geração de PDF ainda em
+  andamento. XLS não foi implementado (autorizado explicitamente a ficar
+  de fora, se complicasse — e complicaria, exigindo uma biblioteca nova só
+  para isso).
 
 ## Roadmap
 

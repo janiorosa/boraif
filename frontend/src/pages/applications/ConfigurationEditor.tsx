@@ -10,9 +10,12 @@ interface Props {
   subjects: Subject[];
   gradeYears: GradeYear[];
   difficulties: Difficulty[];
-  onSubmit: (updated: { totalQuestions: number; gradeYearIds: number[]; quotaRules: QuotaRule[] }) => void;
+  onSubmit: (updated: { totalQuestions: number; variantCount: number; gradeYearIds: number[]; quotaRules: QuotaRule[] }) => void;
   submitting: boolean;
   error: string | null;
+  // Só o caderno tem tipos de prova (booklet_configurations.variant_count) —
+  // a configuração padrão não usa esse campo, então fica escondido lá.
+  showVariantCount?: boolean;
 }
 
 // Editor de configuração compartilhado pelo caderno (seção 22/23) e pela
@@ -27,8 +30,10 @@ export function ConfigurationEditor({
   onSubmit,
   submitting,
   error,
+  showVariantCount = false,
 }: Props) {
   const [totalQuestions, setTotalQuestions] = useState(configuration.totalQuestions);
+  const [variantCount, setVariantCount] = useState(configuration.variantCount || 2);
   const [gradeYearIds, setGradeYearIds] = useState<number[]>(configuration.gradeYearIds);
   const [quotaRules, setQuotaRules] = useState<QuotaRule[]>(configuration.quotaRules);
 
@@ -53,7 +58,7 @@ export function ConfigurationEditor({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit({ totalQuestions, gradeYearIds, quotaRules });
+    onSubmit({ totalQuestions, variantCount, gradeYearIds, quotaRules });
   }
 
   return (
@@ -74,6 +79,24 @@ export function ConfigurationEditor({
             style={{ display: "block", width: 120 }}
           />
         </label>
+
+        {showVariantCount && (
+          <label style={{ display: "block", marginTop: 16 }}>
+            Quantidade de tipos de prova
+            <input
+              type="number"
+              min={1}
+              max={4}
+              value={variantCount}
+              onChange={(e) => setVariantCount(Number(e.target.value))}
+              style={{ display: "block", width: 120 }}
+            />
+            <span style={{ color: "#666", fontSize: 14 }}>
+              De 1 a 4. Mesmas questões em todos os tipos — só a ordem das questões (por disciplina) e das
+              alternativas muda entre eles.
+            </span>
+          </label>
+        )}
 
         <fieldset style={{ marginTop: 16 }}>
           <legend>Anos</legend>

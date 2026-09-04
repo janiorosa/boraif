@@ -29,9 +29,13 @@ type Configuration struct {
 	ID             int64
 	BookletID      int64
 	TotalQuestions int
-	IsFrozen       bool
-	GradeYearIDs   []int64
-	QuotaRules     []QuotaRule
+	// VariantCount é o número de "tipos de prova" do caderno (1 a 4,
+	// padrão 2 — o mais comum): mesmas questões em todos os tipos, só a
+	// ordem (por disciplina) e a ordem das alternativas mudam (pacote pdf).
+	VariantCount int
+	IsFrozen     bool
+	GradeYearIDs []int64
+	QuotaRules   []QuotaRule
 }
 
 // AvailabilityItem é o resultado da validação da seção 24 para uma linha de

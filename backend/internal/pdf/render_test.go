@@ -119,29 +119,33 @@ func TestRenderHTML_UnknownNodeFallsBackToChildren(t *testing.T) {
 	}
 }
 
-func TestBuildDocument_ProducesValidLookingHTML(t *testing.T) {
-	snapshots := []Snapshot{
+func TestBuildExamDocument_ProducesValidLookingHTML(t *testing.T) {
+	questions := []VariantQuestionDetail{
 		{
-			ID:                1,
-			PositionInBooklet: 1,
+			SnapshotID:        1,
+			PositionInVariant: 1,
 			StatementJSON:     []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Enunciado"}]}]}`),
 			CommandJSON:       []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Comando"}]}]}`),
 			Alternatives: []SnapshotAlternative{
 				{Position: "A", Content: []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Alt A"}]}]}`), IsCorrect: true},
 				{Position: "B", Content: []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Alt B"}]}]}`)},
 			},
+			CorrectLetter: "A",
 		},
 	}
 
-	html, err := BuildDocument("Prova de Teste", snapshots)
+	html, err := BuildExamDocument("Prova de Teste", 1, questions)
 	if err != nil {
-		t.Fatalf("BuildDocument failed: %v", err)
+		t.Fatalf("BuildExamDocument failed: %v", err)
 	}
 	if !strings.HasPrefix(html, "<!doctype html>") {
 		t.Error("expected document to start with <!doctype html>")
 	}
 	if !strings.Contains(html, "Prova de Teste") {
 		t.Error("expected the title to appear in the document")
+	}
+	if !strings.Contains(html, "TIPO 1") {
+		t.Error("expected the variant badge to appear in the document")
 	}
 	if !strings.Contains(html, "Questão 1") {
 		t.Error("expected the question number to appear in the document")
@@ -151,5 +155,23 @@ func TestBuildDocument_ProducesValidLookingHTML(t *testing.T) {
 	}
 	if !strings.Contains(html, "data-math-ready") {
 		t.Error("expected the math-ready marker script used by chromium.go's wait condition")
+	}
+}
+
+func TestBuildAnswerKeyDocument_ProducesValidLookingHTML(t *testing.T) {
+	questions := []VariantQuestionDetail{
+		{PositionInVariant: 1, CorrectLetter: "A"},
+		{PositionInVariant: 2, CorrectLetter: "C"},
+	}
+
+	html, err := BuildAnswerKeyDocument("Prova de Teste", 2, questions)
+	if err != nil {
+		t.Fatalf("BuildAnswerKeyDocument failed: %v", err)
+	}
+	if !strings.Contains(html, "TIPO 2") {
+		t.Error("expected the variant badge to appear in the answer key")
+	}
+	if !strings.Contains(html, "Q1 - A") || !strings.Contains(html, "Q2 - C") {
+		t.Error("expected each question's answer to appear as 'Q# - Letter'")
 	}
 }

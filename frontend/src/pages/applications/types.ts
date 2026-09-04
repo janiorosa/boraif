@@ -28,9 +28,18 @@ export interface QuotaRule {
 export interface Configuration {
   bookletId?: number;
   totalQuestions: number;
+  // Quantos "tipos de prova" o caderno terá (1 a 4, padrão 2): mesmas
+  // questões em todos, só a ordem (por disciplina) e a ordem das
+  // alternativas mudam de tipo para tipo — ver pdf.Variant no backend.
+  variantCount: number;
   isFrozen: boolean;
   gradeYearIds: number[];
   quotaRules: QuotaRule[];
+}
+
+export interface Variant {
+  id: number;
+  variantNumber: number;
 }
 
 export interface AvailabilityItem {
@@ -48,10 +57,14 @@ export interface AvailabilityResult {
 }
 
 export type GenerationStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type DocumentKind = "EXAM" | "ANSWER_KEY";
 
 export interface GeneratedDocument {
   id: number;
   bookletId: number;
+  variantId?: number;
+  variantNumber?: number;
+  kind: DocumentKind;
   status: GenerationStatus;
   errorMessage?: string;
   createdAt: string;

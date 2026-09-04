@@ -39,10 +39,17 @@ export function DefaultConfigurationPage() {
     };
   }, []);
 
-  async function handleSave(updated: { totalQuestions: number; gradeYearIds: number[]; quotaRules: QuotaRule[] }) {
+  async function handleSave(updated: {
+    totalQuestions: number;
+    variantCount: number;
+    gradeYearIds: number[];
+    quotaRules: QuotaRule[];
+  }) {
     setSaving(true);
     setError(null);
     try {
+      // variantCount não existe na configuração padrão (só nos cadernos) —
+      // o backend simplesmente ignora esse campo aqui.
       const cfg = await api.put<Configuration>("/api/default-configuration", updated);
       setConfiguration(cfg);
     } catch (err) {
